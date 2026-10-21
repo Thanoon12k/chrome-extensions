@@ -35,6 +35,7 @@ await context.route('https://axncazensmjdqpczvzwf.supabase.co/**', async route =
   const path = new URL(request.url()).pathname;
   const body = request.postDataJSON();
   const respond = (data, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
+  if (path === '/auth/v1/signup') return respond({ user: { ...user, identities: [] }, session: null });
   if (path === '/auth/v1/token') return respond({ access_token: jwt, refresh_token: 'test-refresh-token', expires_in: 3600, token_type: 'bearer', user });
   if (path === '/auth/v1/user') return respond(user);
   if (path === '/auth/v1/logout') return respond({});
@@ -66,6 +67,11 @@ async function add(name, value, kind = 'API key') {
 }
 try {
   await page.goto(url);
+  await page.getByRole('button', { name: 'New here? Create an account', exact: true }).click();
+  await page.getByLabel('Email', { exact: true }).fill('demo@example.test');
+  await page.getByLabel('Account password', { exact: true }).fill('test account password');
+  await page.getByRole('button', { name: 'Create account', exact: true }).click();
+  await page.getByText(/If a new email\/password account was created/).waitFor();
   await page.getByLabel('Email', { exact: true }).fill('demo@example.test');
   await page.getByLabel('Account password', { exact: true }).fill('test account password');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();

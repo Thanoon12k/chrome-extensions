@@ -92,10 +92,11 @@ function lockVault(reason) {
   if (reason) toast(reason);
 }
 
-function showAuth(signUp = false) {
+function showAuth(signUp = false, notice = '') {
   const main = shell();
   pageHeading(main, 'YOUR PRIVATE CORNER', signUp ? 'Make yourself at home.' : 'Everything, in one place.',
     'API keys, passwords, and the little things you need to keep safe.');
+  if (notice) { const note = element('p', 'fine-print', notice); note.role = 'status'; main.append(note); }
   const form = element('form', 'auth-form');
   const email = inputField(form, 'Email', 'email', 'email', 'you@example.com', 'email');
   const password = inputField(form, 'Account password', 'password', 'password', signUp ? 'At least 12 characters' : 'Your account password', signUp ? 'new-password' : 'current-password');
@@ -115,12 +116,12 @@ function showAuth(signUp = false) {
       credentials.password = ''; password.value = '';
       if (response.error) throw response.error;
       if (!response.data.session) {
-        showAuth(); toast('Check your email to confirm your account, then sign in here.'); return;
+        showAuth(false, 'If a new email/password account was created, check your email to confirm it. Already registered with Google? This preview currently supports email/password accounts only.'); return;
       }
       session = response.data.session;
       localStorage.setItem('quiet-vault.last-user.v1', JSON.stringify({ id: session.user.id, email: session.user.email }));
       await routeToVault();
-    } catch (failure) { errorText(error, message(failure)); }
+    } catch (failure) { errorText(error, failure?.code === 'invalid_credentials' ? 'Email or account password did not match. Google-only accounts cannot use password sign-in in this preview.' : message(failure)); }
     finally { submit.disabled = false; switcher.disabled = false; submit.textContent = signUp ? 'Create account' : 'Sign in'; }
   });
   email.focus();
