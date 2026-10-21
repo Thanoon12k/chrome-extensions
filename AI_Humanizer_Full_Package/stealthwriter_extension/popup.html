@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { font: 13px/1.4 system-ui, sans-serif; width: 340px; margin: 0; color: #111827; background: #fff; }
+  header { background: #7c3aed; color: #fff; padding: 10px 14px; font-weight: 600; font-size: 14px; }
+  main { padding: 12px 14px; }
+  .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: #9ca3af; }
+  .ok .dot { background: #16a34a; } .bad .dot { background: #dc2626; }
+  .row { display: flex; gap: 6px; margin: 6px 0; }
+  button { flex: 1; font: 600 12px system-ui, sans-serif; border: 0; border-radius: 7px; padding: 8px; cursor: pointer; background: #e5e7eb; }
+  button.go { background: #16a34a; color: #fff; } button.stop { background: #dc2626; color: #fff; }
+  label { display: block; font-size: 12px; color: #374151; margin-top: 6px; }
+  input, select { width: 100%; box-sizing: border-box; font: 12px system-ui, sans-serif; padding: 5px 6px; border: 1px solid #d1d5db; border-radius: 6px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  details summary { cursor: pointer; font-weight: 600; margin: 4px 0; }
+  .muted { color: #6b7280; font-size: 11px; }
+  #report { white-space: pre-wrap; font: 11px ui-monospace, monospace; color: #374151; }
+</style>
+</head>
+<body>
+<header>StealthWriter Auto Bridge</header>
+<main>
+  <div class="card" id="wb"><span class="dot"></span><span id="wbText">Checking workbench…</span></div>
+
+  <div class="row">
+    <button class="go" id="start">▶ Start auto-humanize</button>
+    <button class="stop" id="stop">■ Stop</button>
+  </div>
+  <div class="row">
+    <button id="open">Open StealthWriter</button>
+    <button id="detect">Test detection</button>
+  </div>
+  <div id="report" class="muted"></div>
+
+  <details>
+    <summary>Settings</summary>
+    <label>Workbench bridge URL <input id="bridgeUrl"></label>
+    <div class="grid">
+      <label>Delay (s) <input id="delaySeconds" type="number" min="1"></label>
+      <label>Timeout (s) <input id="timeoutSeconds" type="number" min="20"></label>
+      <label>Stable (s) <input id="stableSeconds" type="number" min="1"></label>
+    </div>
+    <label>If StealthWriter merges/splits paragraphs
+      <select id="mismatch">
+        <option value="per-paragraph">Redo paragraph by paragraph</option>
+        <option value="skip">Skip the item</option>
+        <option value="stop">Stop so I can fix it</option>
+      </select>
+    </label>
+    <label>Stop after N consecutive errors <input id="maxErrors" type="number" min="1"></label>
+    <label>Button text (regex) <input id="buttonText"></label>
+    <label>Input selector <input id="inputSelector" placeholder="auto"></label>
+    <label>Button selector <input id="buttonSelector" placeholder="auto"></label>
+    <label>Output selector <input id="outputSelector" placeholder="auto"></label>
+    <div class="row">
+      <button id="save">Save</button>
+      <button id="reset">Reset selectors</button>
+    </div>
+    <p class="muted">Tip: use the “Pick input / button / output” buttons on the StealthWriter page panel if auto-detection picks the wrong element.</p>
+  </details>
+</main>
+<script src="shared.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

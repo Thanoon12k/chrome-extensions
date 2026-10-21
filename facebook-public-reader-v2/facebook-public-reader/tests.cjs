@@ -1,0 +1,30 @@
+const assert = require('node:assert/strict');
+const C = require('./core.js');
+for (const s of ['Public','Shared with Public','عام','العامة','\u200fالعامة']) assert.equal(C.publicLabel(s),true);
+for (const s of ['Friends','Only me','Public group','I discuss Public posts','الأصدقاء','أنا فقط','']) assert.equal(C.publicLabel(s),false);
+for (const s of ['See more','Show more','عرض المزيد','مشاهدة المزيد']) assert.equal(C.moreLabel(s),true);
+for (const s of ['View more comments','Like','Share','عرض المزيد من التعليقات']) assert.equal(C.moreLabel(s),false);
+assert.equal(C.permalink('https://www.facebook.com/test/posts/123?tracking=abc'),'https://www.facebook.com/test/posts/123');
+assert.equal(C.permalink('/permalink.php?story_fbid=123&id=45&tracking=x'),'https://www.facebook.com/permalink.php?story_fbid=123&id=45');
+assert.equal(C.permalink('https://evil.com/test/posts/123'),null);
+assert.equal(C.permalink('https://www.facebook.com/profile.php?id=45'),null);
+console.log('Audience, expansion-label and permalink tests passed.');
+assert.equal(C.cleanText('النص الأصلي عرض أقل'),'النص الأصلي');
+assert.equal(C.cleanText('عرض أقل هو تعبير في وسط النص'),'عرض أقل هو تعبير في وسط النص');
+assert.equal(C.dateISO('١٤ سبتمبر ٢٠٢٥'),'2025-09-14');
+assert.equal(C.dateISO('31 فبراير 2025'),null);
+assert.equal(C.dateISO('أمس'),null);
+const old={text:'long complete text'}, next={text:'short'};
+assert.equal(C.merge(old,next),old);
+assert.equal(C.normalize({url:'/a/posts/1',text:'hello',audience:'friends',audienceEvidence:'Public'}),null);
+if (process.argv[2]) {
+  const data=JSON.parse(require('node:fs').readFileSync(process.argv[2],'utf8'));
+  const rows=data.posts.map(C.normalize);
+  assert.equal(rows.filter(Boolean).length,26);
+  assert.equal(new Set(rows.map(r=>r.url)).size,26);
+  assert.equal(rows.filter(r=>/عرض أقل\s*$/.test(r.text)).length,0);
+  assert.equal(rows.filter(r=>r.dateISO).length,26);
+  for(let i=0;i<rows.length;i++) assert.equal(rows[i].text,C.cleanText(data.posts[i].text));
+  console.log('All 26 uploaded posts retained; 25 UI suffixes cleaned; 26 exact dates parsed.');
+}
+console.log('Cleaning, date, import validation and longest-text merge tests passed.');

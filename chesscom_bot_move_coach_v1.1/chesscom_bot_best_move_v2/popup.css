@@ -1,0 +1,47 @@
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  width: 330px;
+  background: #1f211d;
+  color: #f4f5f0;
+  font: 13px/1.35 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.wrap { padding: 16px; }
+.brand { display: flex; align-items: center; gap: 11px; margin-bottom: 14px; }
+.brand img { border-radius: 12px; }
+h1 { margin: 0; font-size: 16px; line-height: 1.15; }
+.brand p { margin: 3px 0 0; color: #afb5a7; font-size: 11px; }
+.status-card {
+  border: 1px solid #3a3e35;
+  border-radius: 12px;
+  padding: 12px;
+  background: #292c27;
+  margin-bottom: 12px;
+}
+.status-card.ok { border-color: #6f9d43; background: #273121; }
+.status-card.locked { border-color: #9b7842; background: #312b22; }
+.status-card.neutral { border-color: #4a4d46; }
+.status-row { display: flex; align-items: center; gap: 8px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: #868b80; box-shadow: 0 0 0 3px rgba(255,255,255,.03); }
+.ok .dot { background: #8fbd58; }
+.locked .dot { background: #e0a94f; }
+.status-card p { margin: 7px 0 0; color: #c1c5bc; font-size: 12px; }
+.controls { margin-top: 8px; }
+.grid2 { display: grid; grid-template-columns: 1fr 92px; gap: 10px; align-items: end; margin-bottom: 10px; }
+label span { display: block; color: #b8bdb2; font-size: 11px; margin-bottom: 5px; }
+select {
+  width: 100%; border: 1px solid #454940; background: #30332e; color: #fff;
+  border-radius: 9px; padding: 8px;
+}
+.switch-line { display: flex; justify-content: space-between; align-items: center; border: 1px solid #454940; border-radius: 9px; padding: 8px 9px; height: 36px; }
+.switch-line span { margin: 0; }
+button {
+  width: 100%; border: 0; border-radius: 10px; padding: 10px 11px; margin-top: 8px;
+  color: #fff; cursor: pointer; font-weight: 700;
+}
+button:hover { filter: brightness(1.08); }
+.primary { background: #739c45; }
+.secondary { background: #3b3f37; }
+.hidden { display: none !important; }
+footer { margin-top: 13px; padding-top: 10px; border-top: 1px solid #34372f; color: #8f9588; font-size: 10px; }

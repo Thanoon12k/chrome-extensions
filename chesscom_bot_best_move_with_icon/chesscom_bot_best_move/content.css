@@ -1,0 +1,55 @@
+#cbt-panel {
+  position: fixed;
+  top: 92px;
+  right: 18px;
+  z-index: 2147483646;
+  width: 286px;
+  box-sizing: border-box;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(24, 24, 22, 0.96);
+  color: #f4f4f2;
+  box-shadow: 0 10px 34px rgba(0,0,0,.42);
+  border: 1px solid rgba(255,255,255,.10);
+  font: 13px/1.35 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  user-select: none;
+}
+
+#cbt-panel * { box-sizing: border-box; }
+#cbt-panel .cbt-title { font-size: 15px; font-weight: 750; margin-bottom: 2px; }
+#cbt-panel .cbt-subtitle { color: #b7b7b1; font-size: 11px; margin-bottom: 11px; }
+#cbt-panel .cbt-status { padding: 9px 10px; border-radius: 9px; background: rgba(255,255,255,.07); margin-bottom: 10px; }
+#cbt-panel .cbt-move { font-size: 24px; font-weight: 800; letter-spacing: .2px; margin: 5px 0 2px; }
+#cbt-panel .cbt-eval { color: #c8c8c3; font-size: 12px; min-height: 17px; }
+#cbt-panel .cbt-pv { color: #aaa9a3; font-size: 11px; word-break: break-word; margin-top: 7px; max-height: 46px; overflow: hidden; }
+#cbt-panel .cbt-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+#cbt-panel label { color: #d6d6d1; font-size: 12px; }
+#cbt-panel select,
+#cbt-panel button {
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 9px;
+  background: #3a3a36;
+  color: #fff;
+  font: inherit;
+}
+#cbt-panel button { cursor: pointer; font-weight: 650; }
+#cbt-panel button:hover { filter: brightness(1.15); }
+#cbt-panel .cbt-primary { flex: 1; background: #6a8f3b; }
+#cbt-panel .cbt-small { padding: 6px 8px; }
+#cbt-panel .cbt-auto { display:flex; gap:6px; align-items:center; margin-left:auto; }
+#cbt-panel .cbt-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:6px; background:#888; }
+#cbt-panel .cbt-dot.ok { background:#78a94d; }
+#cbt-panel .cbt-dot.busy { background:#d9a441; }
+#cbt-panel .cbt-dot.err { background:#d05c55; }
+#cbt-panel .cbt-foot { color:#85857f; font-size:10px; margin-top:9px; }
+
+.cbt-board-overlay {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  pointer-events: none !important;
+  z-index: 9999 !important;
+  overflow: visible !important;
+}

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bot Move Coach</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <main class="wrap">
+    <header class="brand">
+      <img src="icons/icon48.png" alt="" width="42" height="42" />
+      <div>
+        <h1>Bot Move Coach</h1>
+        <p>Real-time Stockfish hints</p>
+      </div>
+    </header>
+
+    <section id="statusCard" class="status-card neutral">
+      <div class="status-row">
+        <span id="statusDot" class="dot"></span>
+        <strong id="statusTitle">Checking page…</strong>
+      </div>
+      <p id="statusText">Please wait.</p>
+    </section>
+
+    <section id="botControls" class="controls hidden">
+      <div class="grid2">
+        <label>
+          <span>Depth</span>
+          <select id="depth">
+            <option value="8">8 — fast</option>
+            <option value="10">10</option>
+            <option value="12">12 — balanced</option>
+            <option value="14">14</option>
+            <option value="15">15 — strongest</option>
+          </select>
+        </label>
+        <label class="switch-line">
+          <span>Auto</span>
+          <input id="auto" type="checkbox" checked />
+        </label>
+      </div>
+      <button id="analyze" class="primary">Analyze current position</button>
+      <button id="togglePanel" class="secondary">Show / hide board panel</button>
+    </section>
+
+    <button id="openBot" class="primary hidden">Open Chess.com Play Computer</button>
+
+    <footer>
+      Works only on Chess.com computer/bot pages. It stays disabled on human games.
+    </footer>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
