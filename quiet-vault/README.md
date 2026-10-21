@@ -19,7 +19,7 @@ If the email provider rate-limits signup, wait before retrying or use an existin
 - Open an item to edit, reveal for 15 seconds, or delete with a second click to confirm.
 - The top-right menu provides Lock, encrypted backup, restore backup, and Sign out.
 - The popup locks when closed/hidden or after 2 minutes without keyboard/pointer activity. Escape locks immediately. Unlock again when opening the popup.
-- Offline access works after the first successful sign-in and vault setup on that device. Edits are saved encrypted locally and sync when connected, on opening/unlocking, or by clicking the small sync status. The extension does not run a background vault-sync service; its background worker only finishes Google sign-in.
+- Offline access works after the first successful sign-in and vault setup on that device. Edits are saved encrypted locally and sync when connected, on opening/unlocking, or by clicking the small sync status. The extension has no background service worker. Sync runs while the vault is open.
 - Copied secrets remain on your system clipboard until replaced; this extension never reads your clipboard.
 
 ## Encryption and storage
@@ -29,7 +29,7 @@ If the email provider rate-limits signup, wait before retrying or use an existin
 - Authenticated additional data binds ciphertext to the account, format version, and purpose. Local cache and cloud payloads use different purpose contexts.
 - Master passwords and decrypted values are never saved in local storage or sent to Supabase. Decrypted values exist in the open popup's memory while unlocked. JavaScript cannot guarantee physical memory erasure; a compromised device/browser can still capture secrets.
 - Supabase stores encrypted contents, wrapped key, salt, nonces, user ID, revision, and update time. Supabase also holds normal account and session data. Its publishable API key is intentionally public; no secret/service-role key is bundled.
-- The Supabase account session is stored in this extension's chrome.storage.local under its own key, shared with its background sign-in worker. The encrypted vault cache stays in extension localStorage. Use a trusted browser profile. The master password is still required to unlock. No content scripts, analytics, remote code, or page-reading permissions.
+- The Supabase account session is stored in this extension's chrome.storage.local under its own key, shared between its popup and full vault tabs. The encrypted vault cache stays in extension localStorage. Use a trusted browser profile. The master password is still required to unlock. No content scripts, analytics, remote code, or page-reading permissions.
 - RLS restricts vault rows to `auth.uid() = user_id`. The save RPC is SECURITY INVOKER and checks a revision to reject stale writes.
 - Independent edits merge. Conflicting edits preserve the other device's version and create a local “conflict copy.” An offline deletion conflicting with an edit keeps the other device's edit. A second window is locked when the shared encrypted cache changes.
 - Version 1 supports a small personal vault: at most 900 KB of serialized local state and 32,000 characters per value. Deleted records retain encrypted tombstones for synchronization. Large vaults need a later per-record protocol.
@@ -69,7 +69,7 @@ To repeat the packaged extension smoke test on Windows: `node tests/extension-sm
 
 ## Google sign-in (0.1.1)
 
-The login screen focuses on **Continue with Google**, with **Use email instead** opening the existing email/password form. Google sign-in runs in a browser-managed authorization window. A background worker finishes sign-in even when the popup closes, then opens a vault tab. A master password is still required to create or unlock the encrypted vault.
+The login screen focuses on **Continue with Google**, with **Use email instead** opening the existing email/password form. Clicking Google sign-in in the action popup opens a dedicated vault tab, which starts the browser-managed authorization window and finishes sign-in. No background worker or message handoff is required. A master password is still required to create or unlock the encrypted vault.
 
 OAuth uses PKCE. The callback accepts only a single authorization code at the exact registered URL; implicit access tokens and unexpected callback origins/paths are rejected. No Google client secret is in the extension. Only standard Google identity scopes are requested by the configured Supabase provider.
 
@@ -79,3 +79,8 @@ Supabase Authentication > URL Configuration must include exactly:
 `https://ecoganpmeologajglpdbkjnjmmllflga.chromiumapp.org/supabase`
 
 Add this callback alongside the existing clinic callback. Keep the existing Site URL and Google provider credentials unchanged. No Google Cloud redirect changes are needed: Google still returns to the existing Supabase Auth callback.
+
+
+### 0.1.3: Google sign-in handoff fix
+
+Removed the runtime-message/background-worker dependency behind “Could not establish connection. Receiving end does not exist.” The popup now opens a vault tab, and that tab performs PKCE Google sign-in directly. The manifest has no background worker. Closing a Google window shows a retry message; the master password is still required after sign-in. The exact Supabase callback above must still be allowed before real Google sign-in can finish.

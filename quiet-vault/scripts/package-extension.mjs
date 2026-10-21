@@ -7,7 +7,6 @@ const manifest = {
   description: 'A quiet place for API keys, passwords, and variables. Encrypted on your device, synced to your account.',
   minimum_chrome_version: '120', permissions: ['clipboardWrite', 'identity', 'storage'],
   host_permissions: ['https://axncazensmjdqpczvzwf.supabase.co/*'],
-  background: { service_worker: 'background.js', type: 'module' },
   action: { default_popup: 'index.html', default_title: 'Quiet Vault', default_icon: { 16: 'icons/icon16.png', 48: 'icons/icon48.png', 128: 'icons/icon128.png' } },
   icons: { 16: 'icons/icon16.png', 48: 'icons/icon48.png', 128: 'icons/icon128.png' },
   content_security_policy: { extension_pages: csp }

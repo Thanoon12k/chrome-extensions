@@ -1,4 +1,5 @@
-import { client } from './client.js';
+import { client, authStorage, AUTH_KEY } from './client.js';
+import { googleSignIn, oauthError } from './oauth.js';
 import { Vault, readCache } from './store.js';
 import './style.css';
 
@@ -96,7 +97,7 @@ function showAuth(signUp = false, notice = '') {
     'API keys, passwords, and the little things you need to keep safe.');
   if (notice) { const note = element('p', 'fine-print', notice); note.role = 'status'; main.append(note); }
   const google = element('button', 'google-button', 'Continue with Google');
-  google.type = 'button';
+  google.type = 'button'; google.id = 'google-sign-in';
   const googleMark = element('span', 'google-mark', 'G'); googleMark.setAttribute('aria-hidden', 'true'); google.prepend(googleMark);
   const googleError = element('p', 'form-error'); googleError.role = 'alert'; googleError.hidden = true;
   const emailToggle = element('button', 'text-button auth-switch', 'Use email instead');
@@ -111,18 +112,31 @@ function showAuth(signUp = false, notice = '') {
   main.append(google, googleError, emailToggle, emailSection);
   google.onclick = async () => {
     errorText(googleError, '');
-    if (!globalThis.chrome?.runtime?.id || !chrome.runtime.sendMessage) {
+    if (!globalThis.chrome?.runtime?.id || !chrome.identity?.launchWebAuthFlow) {
       errorText(googleError, 'Open the installed Quiet Vault extension to use Google sign-in.'); return;
+    }
+    const isActionPopup = chrome.extension?.getViews?.({ type: 'popup' }).includes(window) ?? false;
+    if (isActionPopup) {
+      google.disabled = true;
+      try {
+        await chrome.tabs.create({ url: chrome.runtime.getURL('index.html?google=1') });
+        window.close();
+      } catch { errorText(googleError, 'Could not open the sign-in tab. Reload Quiet Vault in chrome://extensions and try again.'); google.disabled = false; }
+      return;
     }
     google.disabled = true; google.textContent = 'Opening Google…'; submit.disabled = true; switcher.disabled = true; emailToggle.disabled = true;
     try {
-      const result = await chrome.runtime.sendMessage({ type: 'quiet-vault:google-login' });
-      if (!result?.ok) throw new Error(result?.message || 'Google sign-in could not finish.');
-      const { data, error } = await client.auth.getSession();
-      if (error) throw error;
-      if (data.session) { session = data.session; rememberAccount(); await routeToVault(); }
-    } catch (failure) { errorText(googleError, message(failure)); }
-    finally { google.disabled = false; google.textContent = 'Continue with Google'; google.prepend(googleMark); submit.disabled = false; switcher.disabled = false; emailToggle.disabled = false; }
+      // A full extension tab survives losing focus to Google's authorization window.
+      // No runtime messages or background worker are involved in sign-in.
+      session = await googleSignIn(client, chrome.identity);
+      rememberAccount(); await routeToVault();
+    } catch (failure) {
+      await authStorage.removeItem(`${AUTH_KEY}-code-verifier`);
+      errorText(googleError, oauthError(failure));
+    } finally {
+      google.disabled = false; google.textContent = 'Continue with Google'; google.prepend(googleMark);
+      submit.disabled = false; switcher.disabled = false; emailToggle.disabled = false;
+    }
   };
   const form = element('form', 'auth-form');
   const email = inputField(form, 'Email', 'email', 'email', 'you@example.com', 'email');
@@ -440,10 +454,14 @@ async function boot() {
     const { data, error } = await client.auth.getSession();
     if (error) throw error;
     session = data.session;
+    const currentURL = new URL(location.href);
+    const beginGoogle = currentURL.searchParams.get('google') === '1';
+    currentURL.searchParams.delete('google');
+    if (beginGoogle) history.replaceState(null, '', currentURL.pathname + currentURL.search + currentURL.hash);
     if (session) { rememberAccount(); await routeToVault(); }
     else {
-      const status = globalThis.chrome?.storage?.local ? (await chrome.storage.local.get('quiet-vault.oauth-status'))['quiet-vault.oauth-status'] : null;
-      showAuth(false, status?.state === 'error' ? status.message : '');
+      showAuth();
+      if (beginGoogle) document.querySelector('#google-sign-in').click();
     }
   } catch (failure) {
     if (offlineIdentity && /fetch|network|timeout|offline|load failed/i.test(failure?.message || '')) {
