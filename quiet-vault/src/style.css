@@ -4,3 +4,4 @@
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 
 .google-button{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;height:46px;background:#fff;border:1px solid #dce3d5;border-radius:11px;color:#354d3d;font-size:13px;font-weight:600;margin-top:25px}.google-button:hover{background:#edf2e7}.google-mark{font-size:19px;font-weight:700;color:#4285f4}.auth-divider{display:flex;align-items:center;gap:12px;color:#a3ab9b;font-size:10px;margin:21px 0 18px}.auth-divider:before,.auth-divider:after{content:"";height:1px;background:#e4e9dc;flex:1}.auth-divider+.auth-form{margin-top:0}
+.brand-mark{width:36px;height:36px;border:0;background:transparent;border-radius:9px}.brand-mark img{display:block;width:36px;height:36px}

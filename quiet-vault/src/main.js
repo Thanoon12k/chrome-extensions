@@ -49,7 +49,7 @@ function message(error) {
 }
 function errorText(container, text) { container.textContent = text; container.hidden = !text; }
 function shell() {
-  app.innerHTML = `<header><div class="brand"><span class="brand-mark">${icon('lock')}</span><span>quiet vault<span class="brand-dot">.</span></span></div><div id="header-actions"></div></header><main id="main"></main><footer><span class="footer-dot"></span> A little space for your secrets.</footer>`;
+  app.innerHTML = `<header><div class="brand"><span class="brand-mark"><img src="icons/icon48.png" alt="" width="36" height="36"></span><span>quiet vault<span class="brand-dot">.</span></span></div><div id="header-actions"></div></header><main id="main"></main><footer><span class="footer-dot"></span> A little space for your secrets.</footer>`;
   return document.querySelector('#main');
 }
 function pageHeading(main, eyebrow, title, subtitle) {
