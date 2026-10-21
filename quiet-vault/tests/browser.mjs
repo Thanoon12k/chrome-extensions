@@ -67,6 +67,11 @@ async function add(name, value, kind = 'API key') {
 }
 try {
   await page.goto(url);
+  await mkdir(output, { recursive: true });
+  await page.screenshot({ path: resolve(output, 'quiet-vault-google-signin.png') });
+  await page.getByRole('button', { name: 'Continue with Google', exact: true }).click();
+  await page.getByText('Open the installed Quiet Vault extension to use Google sign-in.', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Use email instead', exact: true }).click();
   await page.getByRole('button', { name: 'New here? Create an account', exact: true }).click();
   await page.getByLabel('Email', { exact: true }).fill('demo@example.test');
   await page.getByLabel('Account password', { exact: true }).fill('test account password');
@@ -155,7 +160,7 @@ try {
   await page.getByRole('button', { name: 'Unlock vault', exact: true }).click();
   await page.getByRole('button', { name: 'Vault options', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await page.getByRole('button', { name: 'Sign in', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Continue with Google', exact: true }).waitFor();
   assert.ok(!(await page.locator('body').innerText()).includes('OpenAI'));
   assert.deepEqual(errors, []);
   console.log('PASS browser: account sign-in, vault creation, mismatch validation, add/search/copy/edit/delete, masks, backups/restore, wrong password, offline restart, later sync, lock/sign-out, CSP, no plaintext persisted or sent.');

@@ -1,14 +1,10 @@
-import { createClient } from '@supabase/supabase-js';
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
+import { client } from './client.js';
 import { Vault, readCache } from './store.js';
 import './style.css';
 
 const app = document.querySelector('#app');
 const toastElement = document.querySelector('#toast');
-const client = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { storageKey: 'quiet-vault.auth.v1', detectSessionInUrl: false, persistSession: true, autoRefreshToken: true },
-  global: { fetch: (url, options = {}) => fetch(url, { ...options, signal: options.signal ?? AbortSignal.timeout(12000) }) }
-});
+
 let session = null;
 let vault = null;
 let query = '';
@@ -92,23 +88,54 @@ function lockVault(reason) {
   if (reason) toast(reason);
 }
 
+function rememberAccount() { localStorage.setItem('quiet-vault.last-user.v1', JSON.stringify({ id: session.user.id, email: session.user.email })); }
+
 function showAuth(signUp = false, notice = '') {
   const main = shell();
   pageHeading(main, 'YOUR PRIVATE CORNER', signUp ? 'Make yourself at home.' : 'Everything, in one place.',
     'API keys, passwords, and the little things you need to keep safe.');
   if (notice) { const note = element('p', 'fine-print', notice); note.role = 'status'; main.append(note); }
+  const google = element('button', 'google-button', 'Continue with Google');
+  google.type = 'button';
+  const googleMark = element('span', 'google-mark', 'G'); googleMark.setAttribute('aria-hidden', 'true'); google.prepend(googleMark);
+  const googleError = element('p', 'form-error'); googleError.role = 'alert'; googleError.hidden = true;
+  const emailToggle = element('button', 'text-button auth-switch', 'Use email instead');
+  const emailSection = element('section'); emailSection.hidden = !signUp && !notice;
+  emailToggle.setAttribute('aria-expanded', String(!emailSection.hidden));
+  emailToggle.onclick = () => {
+    emailSection.hidden = !emailSection.hidden;
+    emailToggle.setAttribute('aria-expanded', String(!emailSection.hidden));
+    emailToggle.textContent = emailSection.hidden ? 'Use email instead' : 'Hide email sign-in';
+    if (!emailSection.hidden) email.focus();
+  };
+  main.append(google, googleError, emailToggle, emailSection);
+  google.onclick = async () => {
+    errorText(googleError, '');
+    if (!globalThis.chrome?.runtime?.id || !chrome.runtime.sendMessage) {
+      errorText(googleError, 'Open the installed Quiet Vault extension to use Google sign-in.'); return;
+    }
+    google.disabled = true; google.textContent = 'Opening Google…'; submit.disabled = true; switcher.disabled = true; emailToggle.disabled = true;
+    try {
+      const result = await chrome.runtime.sendMessage({ type: 'quiet-vault:google-login' });
+      if (!result?.ok) throw new Error(result?.message || 'Google sign-in could not finish.');
+      const { data, error } = await client.auth.getSession();
+      if (error) throw error;
+      if (data.session) { session = data.session; rememberAccount(); await routeToVault(); }
+    } catch (failure) { errorText(googleError, message(failure)); }
+    finally { google.disabled = false; google.textContent = 'Continue with Google'; google.prepend(googleMark); submit.disabled = false; switcher.disabled = false; emailToggle.disabled = false; }
+  };
   const form = element('form', 'auth-form');
   const email = inputField(form, 'Email', 'email', 'email', 'you@example.com', 'email');
   const password = inputField(form, 'Account password', 'password', 'password', signUp ? 'At least 12 characters' : 'Your account password', signUp ? 'new-password' : 'current-password');
   password.minLength = signUp ? 12 : 1;
   const error = element('p', 'form-error'); error.role = 'alert'; error.hidden = true;
   const submit = primary(signUp ? 'Create account' : 'Sign in');
-  form.append(error, submit); main.append(form);
+  form.append(error, submit); emailSection.append(form);
   const switcher = element('button', 'text-button auth-switch', signUp ? 'Already have an account? Sign in' : 'New here? Create an account');
-  switcher.addEventListener('click', () => showAuth(!signUp)); main.append(switcher);
+  switcher.addEventListener('click', () => showAuth(!signUp)); emailSection.append(switcher);
   main.append(element('p', 'fine-print', 'Your vault has its own master password. Secrets are encrypted before they sync.'));
   form.addEventListener('submit', async event => {
-    event.preventDefault(); errorText(error, ''); submit.disabled = true; switcher.disabled = true;
+    event.preventDefault(); errorText(error, ''); submit.disabled = true; switcher.disabled = true; google.disabled = true; emailToggle.disabled = true;
     submit.textContent = signUp ? 'Creating account…' : 'Signing in…';
     try {
       const credentials = { email: email.value.trim(), password: password.value };
@@ -116,15 +143,15 @@ function showAuth(signUp = false, notice = '') {
       credentials.password = ''; password.value = '';
       if (response.error) throw response.error;
       if (!response.data.session) {
-        showAuth(false, 'If a new email/password account was created, check your email to confirm it. Already registered with Google? This preview currently supports email/password accounts only.'); return;
+        showAuth(false, 'If a new email/password account was created, check your email to confirm it. Already registered with Google? Choose Continue with Google to sign in with that account.'); return;
       }
       session = response.data.session;
-      localStorage.setItem('quiet-vault.last-user.v1', JSON.stringify({ id: session.user.id, email: session.user.email }));
+      rememberAccount();
       await routeToVault();
-    } catch (failure) { errorText(error, failure?.code === 'invalid_credentials' ? 'Email or account password did not match. Google-only accounts cannot use password sign-in in this preview.' : message(failure)); }
-    finally { submit.disabled = false; switcher.disabled = false; submit.textContent = signUp ? 'Create account' : 'Sign in'; }
+    } catch (failure) { errorText(error, failure?.code === 'invalid_credentials' ? 'Email or account password did not match. If you registered with Google, choose Continue with Google above.' : message(failure)); }
+    finally { submit.disabled = false; switcher.disabled = false; google.disabled = false; emailToggle.disabled = false; submit.textContent = signUp ? 'Create account' : 'Sign in'; }
   });
-  email.focus();
+  if (!emailSection.hidden) email.focus(); else google.focus();
 }
 
 async function routeToVault() {
@@ -391,6 +418,10 @@ window.addEventListener('storage', event => {
 setInterval(() => { if (vault && !document.hidden) void syncVault(); }, 60_000);
 client.auth.onAuthStateChange((event, nextSession) => {
   if (event === 'TOKEN_REFRESHED') session = nextSession;
+  if (event === 'SIGNED_IN' && session && nextSession?.user.id !== session.user.id) {
+    bootVersion++; vault?.lock(); vault = null; session = nextSession;
+    app.replaceChildren(); setTimeout(() => { rememberAccount(); void routeToVault(); }, 0);
+  }
   if (event === 'SIGNED_OUT' && session) {
     bootVersion++; vault?.lock(); vault = null; session = null; showAuth();
   }
@@ -409,7 +440,11 @@ async function boot() {
     const { data, error } = await client.auth.getSession();
     if (error) throw error;
     session = data.session;
-    if (session) await routeToVault(); else showAuth();
+    if (session) { rememberAccount(); await routeToVault(); }
+    else {
+      const status = globalThis.chrome?.storage?.local ? (await chrome.storage.local.get('quiet-vault.oauth-status'))['quiet-vault.oauth-status'] : null;
+      showAuth(false, status?.state === 'error' ? status.message : '');
+    }
   } catch (failure) {
     if (offlineIdentity && /fetch|network|timeout|offline|load failed/i.test(failure?.message || '')) {
       session = { user: offlineIdentity }; showUnlock(false);
