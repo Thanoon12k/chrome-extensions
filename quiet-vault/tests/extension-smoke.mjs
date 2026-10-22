@@ -64,6 +64,8 @@ try {
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.goto(`chrome-extension://${config.id}/index.html`);
+  assert.equal(await page.getByRole('button', { name: 'Use email instead', exact: true }).count(), 0);
+  assert.equal(await page.getByLabel('Account password', { exact: true }).count(), 0);
   await page.getByRole('button', { name: 'Continue with Google', exact: true }).click();
   await page.getByText('Google sign-in was cancelled. You can try again.', { exact: true }).waitFor();
   const cancelled = await page.evaluate(async () => await chrome.storage.local.get());
@@ -150,6 +152,14 @@ try {
     assert.ok(!JSON.stringify(requests).includes(forbidden));
     assert.ok(!(await page.evaluate(() => JSON.stringify(localStorage))).includes(forbidden));
   }
+  await page.getByRole('button', { name: 'All secrets', exact: true }).click();
+  row = null; // Authorized server-side reset; old encrypted cache still exists locally.
+  await page.reload();
+  await page.getByRole('searchbox').waitFor();
+  assert.equal(await page.getByLabel('Master password', { exact: true }).count(), 0);
+  assert.equal(await page.locator('.secret-row').count(), 0);
+  assert.equal(row.unlock_mode, 'managed');
+  assert.ok(!(await page.locator('body').innerText()).includes('Legacy token'));
   // Simulate an actual action popup, then verify it opens a durable sign-in tab.
   await page.evaluate(async () => await chrome.storage.local.clear());
   const popup = await context.newPage();

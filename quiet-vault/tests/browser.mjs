@@ -27,7 +27,7 @@ const errors = [];
 const writes = [];
 let row = null;
 let available = true;
-const user = { id: '11111111-1111-4111-8111-111111111111', email: 'demo@example.test', app_metadata: { provider: 'email' }, user_metadata: {}, aud: 'authenticated', role: 'authenticated', created_at: new Date().toISOString() };
+const user = { id: '11111111-1111-4111-8111-111111111111', email: 'demo@example.test', app_metadata: { provider: 'google', providers: ['google'] }, user_metadata: {}, aud: 'authenticated', role: 'authenticated', created_at: new Date().toISOString() };
 const jwt = `${Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url')}.${Buffer.from(JSON.stringify({ sub: user.id, role: 'authenticated', exp: Math.floor(Date.now()/1000) + 3600 })).toString('base64url')}.test-only-signature`;
 await context.route('https://axncazensmjdqpczvzwf.supabase.co/**', async route => {
   if (!available) { await route.abort('internetdisconnected'); return; }
@@ -46,6 +46,7 @@ await context.route('https://axncazensmjdqpczvzwf.supabase.co/**', async route =
       return respond(row, 201);
     }
   }
+  if (path === '/rest/v1/rpc/quiet_vault_managed_key') return respond(Buffer.alloc(32, 37).toString('base64'));
   if (path === '/rest/v1/rpc/quiet_vault_save') {
     writes.push(body);
     if (body.expected_revision !== row.revision) return respond([]);
@@ -56,7 +57,13 @@ await context.route('https://axncazensmjdqpczvzwf.supabase.co/**', async route =
 });
 page.on('pageerror', error => errors.push(error.message));
 page.on('console', event => { if (event.type() === 'error' && /content security policy|refused to/i.test(event.text())) errors.push(event.text()); });
-const master = 'demo master password never transmitted';
+await page.addInitScript(() => {
+  globalThis.chrome = { runtime: { id: 'test-extension' }, identity: {
+    getRedirectURL: () => 'https://test-extension.chromiumapp.org/supabase',
+    launchWebAuthFlow: async () => 'https://test-extension.chromiumapp.org/supabase?code=browser-test-code'
+  } };
+});
+
 async function add(name, value, kind = 'API key') {
   await page.getByRole('button', { name: 'Add', exact: true }).click();
   await page.getByLabel('Name', { exact: true }).fill(name);
@@ -71,23 +78,9 @@ try {
   await page.goto(url);
   await mkdir(output, { recursive: true });
   await page.screenshot({ path: resolve(output, 'quiet-vault-google-signin.png') });
+  assert.equal(await page.getByRole('button', { name: 'Use email instead', exact: true }).count(), 0);
+  assert.equal(await page.getByLabel('Account password', { exact: true }).count(), 0);
   await page.getByRole('button', { name: 'Continue with Google', exact: true }).click();
-  await page.getByText('Open the installed Quiet Vault extension to use Google sign-in.', { exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Use email instead', exact: true }).click();
-  await page.getByRole('button', { name: 'New here? Create an account', exact: true }).click();
-  await page.getByLabel('Email', { exact: true }).fill('demo@example.test');
-  await page.getByLabel('Account password', { exact: true }).fill('test account password');
-  await page.getByRole('button', { name: 'Create account', exact: true }).click();
-  await page.getByText(/If a new email\/password account was created/).waitFor();
-  await page.getByLabel('Email', { exact: true }).fill('demo@example.test');
-  await page.getByLabel('Account password', { exact: true }).fill('test account password');
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await page.getByLabel('Master password', { exact: true }).fill(master);
-  await page.getByLabel('Confirm master password', { exact: true }).fill('does not match');
-  await page.getByRole('button', { name: 'Create my vault' }).click();
-  await page.getByText('The passwords do not match.').waitFor();
-  await page.getByLabel('Confirm master password', { exact: true }).fill(master);
-  await page.getByRole('button', { name: 'Create my vault' }).click();
   await page.getByRole('searchbox').waitFor();
   await mkdir(output, { recursive: true });
   await page.screenshot({ path: resolve(output, 'quiet-vault-empty.png') });
@@ -122,8 +115,8 @@ try {
   await page.locator('#sync-status').click();
   await page.getByText('Vault is up to date.', { exact: true }).waitFor();
   const saved = await page.evaluate(() => JSON.stringify(localStorage));
-  for (const forbidden of ['edited-demo-value', 'demo-github-value', 'OpenAI · personal', master]) assert.ok(!saved.includes(forbidden));
-  for (const forbidden of ['edited-demo-value', 'demo-github-value', 'OpenAI · personal', master]) assert.ok(!JSON.stringify(writes).includes(forbidden));
+  for (const forbidden of ['edited-demo-value', 'demo-github-value', 'OpenAI · personal']) assert.ok(!saved.includes(forbidden));
+  for (const forbidden of ['edited-demo-value', 'demo-github-value', 'OpenAI · personal']) assert.ok(!JSON.stringify(writes).includes(forbidden));
   await page.getByRole('button', { name: 'Vault options', exact: true }).click();
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Save encrypted backup', exact: true }).click();
@@ -139,15 +132,10 @@ try {
   available = false;
   await add('Offline key', 'offline-only-secret');
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Unlock vault', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Open vault', exact: true }).waitFor();
   assert.ok(!(await page.locator('body').innerText()).includes('Offline key'));
   await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { get: () => false }));
   await page.reload();
-  await page.getByLabel('Master password', { exact: true }).fill('wrong master password');
-  await page.getByRole('button', { name: 'Unlock vault', exact: true }).click();
-  await page.getByText(/Could not unlock/).waitFor();
-  await page.getByLabel('Master password', { exact: true }).fill(master);
-  await page.getByRole('button', { name: 'Unlock vault', exact: true }).click();
   await page.getByRole('button', { name: 'Edit Offline key', exact: true }).waitFor();
   available = true;
   await page.locator('#sync-status').click();
@@ -158,14 +146,13 @@ try {
   await page.clock.install();
   await page.getByRole('searchbox').click();
   await page.clock.fastForward(120001);
-  await page.getByRole('button', { name: 'Unlock vault', exact: true }).waitFor();
-  await page.getByLabel('Master password', { exact: true }).fill(master);
-  await page.getByRole('button', { name: 'Unlock vault', exact: true }).click();
+  await page.getByRole('button', { name: 'Open vault', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Open vault', exact: true }).click();
   await page.getByRole('button', { name: 'Vault options', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await page.getByRole('button', { name: 'Continue with Google', exact: true }).waitFor();
   assert.ok(!(await page.locator('body').innerText()).includes('OpenAI'));
   assert.deepEqual(errors, []);
-  console.log('PASS browser: account sign-in, vault creation, mismatch validation, add/search/copy/edit/delete, masks, backups/restore, wrong password, offline restart, later sync, lock/sign-out, CSP, no plaintext persisted or sent.');
+  console.log('PASS browser: Google-only sign-in, no email/password controls, automatic vault creation, add/search/copy/edit/delete, masks, backups/restore, offline automatic reopening, later sync, lock/sign-out, CSP, no plaintext persisted or sent.');
   console.log(`Screenshots: ${output}`);
 } finally { await browser.close(); server.close(); }
