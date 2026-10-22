@@ -12,7 +12,11 @@ export function authorizationCode(callbackUrl, expectedRedirect) {
   return codes[0];
 }
 
-export async function googleSignIn(client, identity) {
+export async function googleSignIn(client, identity, record = () => {}) {
+  let stage = 'authorize';
+  record('start');
+  try {
+  record(stage);
   const redirectTo = identity.getRedirectURL('supabase');
   const response = await client.auth.signInWithOAuth({ provider: 'google', options: {
     redirectTo, skipBrowserRedirect: true, queryParams: { prompt: 'select_account' }
@@ -22,12 +26,21 @@ export async function googleSignIn(client, identity) {
   if (authUrl.protocol !== 'https:' || authUrl.searchParams.get('provider') !== 'google') {
     throw new Error('Invalid sign-in URL.');
   }
+  stage = 'browser'; record(stage);
   const finalUrl = await identity.launchWebAuthFlow({ url: authUrl.href, interactive: true });
+  stage = 'callback'; record(stage);
   const code = authorizationCode(finalUrl, redirectTo);
+  stage = 'exchange'; record(stage);
   const exchanged = await client.auth.exchangeCodeForSession(code);
   if (exchanged.error) throw exchanged.error;
   if (!exchanged.data.session?.user?.id) throw new Error('Google sign-in did not create a session.');
+  record('success');
   return exchanged.data.session;
+  } catch (failure) {
+    const raw = failure?.message ?? '';
+    const reason = /cancel|closed|did not approve/i.test(raw) ? 'cancelled' : /fetch|network|timeout/i.test(raw) ? 'network' : stage === 'callback' ? 'invalid_callback' : stage === 'exchange' ? 'exchange_failed' : 'unknown';
+    record('failed', reason); throw failure;
+  }
 }
 
 export function oauthError(error) {

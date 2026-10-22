@@ -1,6 +1,8 @@
 import { client, authStorage, AUTH_KEY } from './client.js';
 import { googleSignIn, oauthError } from './oauth.js';
 import { Vault, readCache } from './store.js';
+import { managedSecret, migrateManaged, forgetManagedSecret } from './managed.js';
+import { loginAttempt, downloadLoginDiagnostics } from './diagnostics.js';
 import './style.css';
 
 const app = document.querySelector('#app');
@@ -8,6 +10,7 @@ const toastElement = document.querySelector('#toast');
 
 let session = null;
 let vault = null;
+let managedMode = false;
 let query = '';
 let idleTimer;
 let revealTimer;
@@ -85,7 +88,7 @@ function lockVault(reason) {
   vault?.lock(); vault = null; query = ''; syncing = false;
   // Remove decrypted values and any editor immediately, before further async work.
   app.replaceChildren();
-  showUnlock(false);
+  if (managedMode) showManagedGate(); else showUnlock(false);
   if (reason) toast(reason);
 }
 
@@ -128,11 +131,16 @@ function showAuth(signUp = false, notice = '') {
     try {
       // A full extension tab survives losing focus to Google's authorization window.
       // No runtime messages or background worker are involved in sign-in.
-      session = await googleSignIn(client, chrome.identity);
+      const attempt = loginAttempt();
+      session = await googleSignIn(client, chrome.identity, attempt.record);
       rememberAccount(); await routeToVault();
     } catch (failure) {
       await authStorage.removeItem(`${AUTH_KEY}-code-verifier`);
       errorText(googleError, oauthError(failure));
+      if (!main.querySelector('#login-diagnostics')) {
+        const logs = element('button', 'text-button full', 'Download sign-in diagnostics'); logs.id = 'login-diagnostics';
+        logs.onclick = () => void downloadLoginDiagnostics(); googleError.after(logs);
+      }
     } finally {
       google.disabled = false; google.textContent = 'Continue with Google'; google.prepend(googleMark);
       submit.disabled = false; switcher.disabled = false; emailToggle.disabled = false;
@@ -147,7 +155,7 @@ function showAuth(signUp = false, notice = '') {
   form.append(error, submit); emailSection.append(form);
   const switcher = element('button', 'text-button auth-switch', signUp ? 'Already have an account? Sign in' : 'New here? Create an account');
   switcher.addEventListener('click', () => showAuth(!signUp)); emailSection.append(switcher);
-  main.append(element('p', 'fine-print', 'Your vault has its own master password. Secrets are encrypted before they sync.'));
+  main.append(element('p', 'fine-print', 'Google sign-in opens your vault. Secrets are encrypted before they sync.'));
   form.addEventListener('submit', async event => {
     event.preventDefault(); errorText(error, ''); submit.disabled = true; switcher.disabled = true; google.disabled = true; emailToggle.disabled = true;
     submit.textContent = signUp ? 'Creating account…' : 'Signing in…';
@@ -168,18 +176,28 @@ function showAuth(signUp = false, notice = '') {
   if (!emailSection.hidden) email.focus(); else google.focus();
 }
 
+function isGoogleAccount() {
+  return session.user.app_metadata?.provider === 'google' || session.user.app_metadata?.providers?.includes('google');
+}
 async function routeToVault() {
   const stamp = ++bootVersion;
   const main = shell(); pageHeading(main, 'QUIET VAULT', 'Just a moment.', 'Finding your encrypted vault…');
   try {
     const cached = readCache(session.user.id);
-    let exists = Boolean(cached);
-    if (!exists) {
-      const probe = new Vault(client, session.user.id);
-      exists = Boolean(await probe.fetchRow());
+    let row;
+    let offline = !navigator.onLine;
+    if (!offline) {
+      try { row = await new Vault(client, session.user.id).fetchRow(); }
+      catch (failure) {
+        if (!cached || !/fetch|network|timeout|offline|load failed/i.test(failure.message ?? '')) throw failure;
+        offline = true;
+      }
     }
+    if (offline) row = cached?.row;
     if (stamp !== bootVersion) return;
-    showUnlock(!exists);
+    managedMode = row?.unlock_mode === 'managed' || (!row && isGoogleAccount());
+    if (managedMode) await openManaged(row, !row, offline);
+    else showUnlock(!row);
   } catch (failure) {
     if (stamp !== bootVersion) return;
     main.append(element('p', 'form-error', message(failure)));
@@ -190,9 +208,10 @@ async function routeToVault() {
 }
 
 function showUnlock(isNew) {
+  const migrating = !isNew && isGoogleAccount();
   const main = shell();
-  pageHeading(main, 'ONLY YOU HOLD THE KEY', isNew ? 'Your secrets start here.' : 'Welcome back.',
-    isNew ? 'Create a master password to encrypt your vault.' : 'Unlock your vault. Everything else can wait.');
+  pageHeading(main, 'ONLY YOU HOLD THE KEY', isNew ? 'Your secrets start here.' : migrating ? 'One last unlock.' : 'Welcome back.',
+    isNew ? 'Create a master password to encrypt your vault.' : migrating ? 'Enter your old master password once. Next time, Google will open your vault.' : 'Unlock your vault. Everything else can wait.');
   const form = element('form', 'auth-form');
   const password = inputField(form, 'Master password', 'password', 'master', isNew ? 'At least 12 characters' : 'Enter your master password', isNew ? 'new-password' : 'current-password');
   password.minLength = isNew ? 12 : 1;
@@ -211,8 +230,12 @@ function showUnlock(isNew) {
     const nextVault = new Vault(client, session.user.id);
     try {
       await nextVault.initialize(password.value, isNew);
+      if (migrating) {
+        await migrateManaged(nextVault, password.value); managedMode = true;
+      }
       password.value = ''; if (confirmation) confirmation.value = '';
-      if (stamp !== bootVersion || document.hidden) { nextVault.lock(); showUnlock(false); return; }
+      if (stamp !== bootVersion) { nextVault.lock(); return; }
+      if (document.hidden) { nextVault.lock(); if (managedMode) showManagedGate(); else showUnlock(false); return; }
       vault = nextVault; showHome(); resetIdle(); void syncVault();
     } catch (failure) {
       nextVault.lock();
@@ -240,7 +263,7 @@ function showHome() {
   search.setAttribute('aria-label', 'Search secrets'); search.autocomplete = 'off'; search.value = query;
   searchBox.append(search);
   const add = element('button', 'primary add-button'); add.innerHTML = `${icon('plus')}<span>Add</span>`;
-  add.addEventListener('click', () => showEditor()); toolbar.append(searchBox, add); main.append(toolbar);
+  add.addEventListener('click', showAddSecret); toolbar.append(searchBox, add); main.append(toolbar);
   const list = element('div', 'secret-list'); list.id = 'secret-list'; list.setAttribute('aria-label', 'Saved secrets');
   main.append(list); search.addEventListener('input', () => { query = search.value; renderList(); });
   renderList(); updateStatus(); search.focus();
@@ -336,6 +359,8 @@ function showEditor(id) {
     clearTimeout(revealTimer);
     if (reveal) revealTimer = setTimeout(() => { value.type = 'password'; toggle.textContent = 'Show'; toggle.setAttribute('aria-label', 'Show secret value'); }, 15000);
   };
+  const description = inputField(form, 'Description (optional)', 'text', 'description', 'A link or a short note', 'off');
+  description.required = false; description.maxLength = 2000; description.value = existing?.description ?? '';
   const label = element('div', 'field');
   const typeLabel = element('label', 'field-label', 'Type'); typeLabel.htmlFor = 'field-kind'; label.append(typeLabel);
   const kind = element('select'); kind.name = 'kind';
@@ -360,7 +385,7 @@ function showEditor(id) {
   form.onsubmit = async event => {
     event.preventDefault(); save.disabled = true; back.disabled = true; if (remove) remove.disabled = true;
     try {
-      await current.save({ name: name.value, value: value.value, kind: kind.value }, id);
+      await current.save({ name: name.value, value: value.value, kind: kind.value, description: description.value }, id);
       value.value = '';
       if (vault === current) { showHome(); toast('Saved.'); scheduleSync(); }
     } catch (failure) { errorText(error, message(failure)); }
@@ -382,7 +407,7 @@ function showOptions() {
       const blob = new Blob([JSON.stringify({ app: 'quiet-vault', backupVersion: 1, owner: session.user.id, ...data })], { type: 'application/json' });
       const url = URL.createObjectURL(blob); const anchor = element('a'); anchor.href = url;
       anchor.download = `quiet-vault-${new Date().toISOString().slice(0, 10)}.json`; anchor.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000); toast('Encrypted backup saved. Keep your master password too.');
+      setTimeout(() => URL.revokeObjectURL(url), 1000); toast(managedMode ? 'Encrypted backup saved.' : 'Encrypted backup saved. Keep your master password too.');
     } catch (failure) { toast(message(failure)); }
   };
   const restore = element('button', 'option-button', 'Restore encrypted backup');
@@ -400,16 +425,19 @@ function showOptions() {
     finally { restore.disabled = false; file.value = ''; }
   };
   const out = element('button', 'option-button danger', 'Sign out'); out.onclick = signOut;
-  main.append(lock, backup, restore, file, out);
+  const logs = element('button', 'option-button', 'Download sign-in diagnostics'); logs.onclick = () => void downloadLoginDiagnostics();
+  main.append(lock, backup, restore, file, logs, out);
   main.append(element('p', 'fine-print', 'Locks when hidden or after 2 minutes of inactivity. Revealed values hide after 15 seconds. Copied values stay on your system clipboard until replaced.'));
-  main.append(element('p', 'fine-print', 'Your master password cannot be reset. Encrypted backups include unsynced edits; restore instructions are in the README.'));
+  main.append(element('p', 'fine-print', managedMode ? 'Your Google account opens this vault. Supabase manages the encryption key. Sign out on shared devices.' : 'Your master password cannot be reset. Keep it safe alongside your encrypted backups.'));
 }
 
 async function signOut() {
-  bootVersion++; vault?.lock(); vault = null;
+  const owner = session?.user.id;
+  bootVersion++; vault?.lock(); vault = null; managedMode = false;
   clearTimeout(idleTimer); clearTimeout(syncTimer); clearTimeout(revealTimer);
   app.replaceChildren();
   localStorage.removeItem('quiet-vault.last-user.v1');
+  if (owner) await forgetManagedSecret(owner);
   // Only this app's session is signed out. Existing clinic sessions are untouched.
   const { error } = await client.auth.signOut({ scope: 'local' });
   if (error) toast('Sign-out could not reach the server. This vault is locked.');
@@ -448,7 +476,7 @@ async function boot() {
     if (identity && typeof identity.id === 'string' && readCache(identity.id)) offlineIdentity = identity;
   } catch { /* A damaged hint is not an authentication credential. */ }
   if (!navigator.onLine && offlineIdentity) {
-    session = { user: offlineIdentity }; showUnlock(false); return;
+    session = { user: offlineIdentity }; await routeToVault(); return;
   }
   try {
     const { data, error } = await client.auth.getSession();
@@ -465,8 +493,86 @@ async function boot() {
     }
   } catch (failure) {
     if (offlineIdentity && /fetch|network|timeout|offline|load failed/i.test(failure?.message || '')) {
-      session = { user: offlineIdentity }; showUnlock(false);
+      session = { user: offlineIdentity }; await routeToVault();
     } else { showAuth(); toast('Please sign in to continue.'); }
   }
 }
 void boot();
+
+async function openManaged(row, isNew, offline = false) {
+  const stamp=++bootVersion;
+  const main=shell(); pageHeading(main,'YOUR PRIVATE CORNER','Opening your vault.','One less password to remember.');
+  const next=new Vault(client,session.user.id);
+  try {
+    const secret=await managedSecret(client,session.user.id,isNew,offline);
+    try { await next.initialize(secret,isNew,{ mode:'managed',row }); }
+    catch (failure) {
+      if (!isNew || !/already exists/.test(failure.message)) throw failure;
+      const current=await next.fetchRow();
+      await next.initialize(secret,false,{mode:'managed',row:current});
+    }
+    if (stamp!==bootVersion) { next.lock(); return; }
+    if (document.hidden) { next.lock(); showManagedGate(); return; }
+    vault=next; showHome(); resetIdle(); void syncVault();
+  } catch (failure) {
+    next.lock();
+    if (stamp!==bootVersion) return;
+    main.append(element('p','form-error',message(failure)));
+    const retry=element('button','primary full','Try again'); retry.onclick=routeToVault;
+    const out=element('button','text-button full','Sign out'); out.onclick=signOut;
+    main.append(retry,out);
+  }
+}
+function showManagedGate() {
+  const main=shell(); pageHeading(main,'YOUR PRIVATE CORNER','Ready when you are.','Open your vault to continue.');
+  const open=element('button','primary full','Open vault'); open.onclick=routeToVault;
+  const out=element('button','text-button full','Sign out'); out.onclick=signOut;
+  main.append(open,out);
+}
+
+
+function showAddSecret() {
+  if (!vault) return;
+  const current = vault;
+  let draftName = '', draftValue = '', draftDescription = '';
+  function nameStep() {
+    if (vault !== current) return;
+    const main = shell();
+    const back = element('button', 'back-button', 'All secrets'); back.onclick = showHome; main.append(back);
+    pageHeading(main, 'STEP 1 OF 2', 'Give it a name.', 'Something you will recognize later.');
+    const form = element('form', 'editor-form');
+    const name = inputField(form, 'Name', 'text', 'name', 'e.g. OpenAI · personal', 'off');
+    name.maxLength = 160; name.value = draftName;
+    const next = primary('Continue'); form.append(next); main.append(form);
+    form.onsubmit = event => {
+      event.preventDefault(); if (!name.value.trim()) { name.focus(); return; }
+      draftName = name.value; tokenStep();
+    };
+    name.focus();
+  }
+  function tokenStep() {
+    if (vault !== current) return;
+    const main = shell();
+    const back = element('button', 'back-button', 'Back'); main.append(back);
+    pageHeading(main, 'STEP 2 OF 2', 'Add the secret.', 'A token, password, or any value you want to keep.');
+    const form = element('form', 'editor-form');
+    const token = inputField(form, 'Token or password', 'password', 'value', 'Paste your secret here', 'off');
+    token.value = draftValue; token.maxLength = 32000; token.autocapitalize = 'off';
+    const description = inputField(form, 'Description (optional)', 'text', 'description', 'A link or a short note', 'off');
+    description.required = false; description.maxLength = 2000; description.value = draftDescription;
+    back.onclick = () => { draftValue = token.value; draftDescription = description.value; nameStep(); };
+    const error = element('p', 'form-error'); error.role = 'alert'; error.hidden = true;
+    const save = primary('Save secret'); form.append(error, save); main.append(form);
+    form.onsubmit = async event => {
+      event.preventDefault(); save.disabled = true; back.disabled = true; errorText(error, '');
+      try {
+        await current.save({ name: draftName, value: token.value, description: description.value, kind: 'Secret' });
+        token.value = ''; draftName = ''; draftValue = ''; draftDescription = ''; description.value = '';
+        if (vault === current) { showHome(); toast('Saved.'); scheduleSync(); }
+      } catch (failure) { if (vault === current) errorText(error, message(failure)); }
+      finally { save.disabled = false; back.disabled = false; }
+    };
+    token.focus();
+  }
+  nameStep();
+}

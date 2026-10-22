@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createVault, unlockVault, seal, open } from '../src/crypto.js';
+import { createVault, unlockVault, seal, open, rewrapVault } from '../src/crypto.js';
 
 const owner = '11111111-1111-4111-8111-111111111111';
 const password = 'a very long test passphrase';
@@ -30,4 +30,16 @@ test('wrong password, changed account, changed purpose, and tampering all fail c
 });
 test('creation rejects short master passwords', async () => {
   await assert.rejects(createVault(owner, 'short'), /12 characters/);
+});
+
+test('managed migration keeps the same data key and existing backups', async () => {
+  const { key, row } = await createVault(owner, password);
+  const cache = await seal(key, owner, { entries: [{ name: 'old item', value: 'kept' }] }, 'cache');
+  const secret = 'a'.repeat(43) + '=';
+  const updated = { ...row, ...await rewrapVault(owner, password, secret, row) };
+  const reopened = await unlockVault(owner, secret, updated);
+  assert.deepEqual(await open(reopened, owner, row), { entries: [] });
+  assert.equal((await open(reopened, owner, cache, 'cache')).entries[0].value, 'kept');
+  await assert.rejects(unlockVault(owner, password, updated));
+  await assert.rejects(rewrapVault(owner, 'wrong', secret, row));
 });

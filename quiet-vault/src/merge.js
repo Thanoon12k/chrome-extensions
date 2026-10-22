@@ -29,6 +29,7 @@ export function validateEntries(entries) {
   for (const item of entries) {
     if (!item || typeof item.id !== 'string' || ids.has(item.id) || typeof item.version !== 'string'
       || typeof item.name !== 'string' || typeof item.value !== 'string' || typeof item.kind !== 'string'
+      || (item.description !== undefined && (typeof item.description !== 'string' || item.description.length > 2000))
       || typeof item.deleted !== 'boolean' || typeof item.updatedAt !== 'string') throw new Error('Invalid vault item.');
     ids.add(item.id);
   }

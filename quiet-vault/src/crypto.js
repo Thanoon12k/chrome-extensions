@@ -67,3 +67,18 @@ export async function unlockVault(owner, password, row) {
   try { return await crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, ['encrypt', 'decrypt']); }
   finally { rawKey.fill(0); }
 }
+
+
+// Rewrap the SAME vault key, preserving every encrypted item/cache/backup.
+export async function rewrapVault(owner, oldPassword, newPassword, row) {
+  const oldWrapping = await passwordKey(oldPassword, fromBase64(row.salt,16), row.iterations);
+  const raw = new Uint8Array(await crypto.subtle.decrypt({ name:'AES-GCM', iv:fromBase64(row.wrap_nonce,12),
+    additionalData:aad(owner,'key') }, oldWrapping, fromBase64(row.wrapped_key,48)));
+  try {
+    const salt=crypto.getRandomValues(new Uint8Array(16));
+    const wrapping=await passwordKey(newPassword,salt,ITERATIONS);
+    const nonce=crypto.getRandomValues(new Uint8Array(12));
+    const wrapped=await crypto.subtle.encrypt({ name:'AES-GCM',iv:nonce,additionalData:aad(owner,'key') },wrapping,raw);
+    return { salt:toBase64(salt), wrapped_key:toBase64(new Uint8Array(wrapped)), wrap_nonce:toBase64(nonce) };
+  } finally { raw.fill(0); }
+}

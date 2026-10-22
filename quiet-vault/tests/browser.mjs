@@ -60,8 +60,10 @@ const master = 'demo master password never transmitted';
 async function add(name, value, kind = 'API key') {
   await page.getByRole('button', { name: 'Add', exact: true }).click();
   await page.getByLabel('Name', { exact: true }).fill(name);
-  await page.getByLabel('Value', { exact: true }).fill(value);
-  await page.getByLabel('Type', { exact: true }).selectOption(kind);
+  assert.equal(await page.getByLabel('Token or password', { exact: true }).count(), 0);
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByLabel('Token or password', { exact: true }).fill(value);
+  if (name.startsWith('OpenAI')) await page.getByLabel('Description (optional)', { exact: true }).fill('https://example.test/keys');
   await page.getByRole('button', { name: 'Save secret', exact: true }).click();
   await page.getByRole('button', { name: `Edit ${name}`, exact: true }).waitFor();
 }
@@ -109,6 +111,7 @@ try {
   await page.getByText('Nothing by that name.').waitFor();
   await page.getByRole('searchbox').fill('');
   await page.getByRole('button', { name: 'Edit OpenAI · personal', exact: true }).click();
+  assert.equal(await page.getByLabel('Description (optional)', { exact: true }).inputValue(), 'https://example.test/keys');
   assert.equal(await page.getByLabel('Value', { exact: true }).getAttribute('type'), 'password');
   await page.getByRole('button', { name: 'Show secret value', exact: true }).click();
   assert.equal(await page.getByLabel('Value', { exact: true }).getAttribute('type'), 'text');

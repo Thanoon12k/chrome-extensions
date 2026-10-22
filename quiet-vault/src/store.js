@@ -34,11 +34,11 @@ export class Vault {
     return data;
   }
 
-  async initialize(password, isNew) {
+  async initialize(password, isNew, options = {}) {
     const cached = readCache(this.owner);
     if (isNew) {
       const created = await createVault(this.owner, password);
-      const { data, error } = await this.client.from('quiet_vaults').insert(created.row).select().single();
+      const { data, error } = await this.client.from('quiet_vaults').insert({ ...created.row, unlock_mode: options.mode ?? 'master' }).select().single();
       if (error) {
         if (error.code === '23505') throw new Error('A vault already exists. Go back and unlock it with its master password.');
         throw error;
@@ -47,7 +47,7 @@ export class Vault {
       this.row = data;
     } else {
       // Local encrypted pending changes must survive an offline restart.
-      this.row = cached?.row ?? await this.fetchRow();
+      this.row = options.row ?? cached?.row ?? await this.fetchRow();
       if (!this.row) throw new Error('No vault found. Connect to the internet to create one.');
       try {
         this.key = await unlockVault(this.owner, password, this.row);
@@ -62,7 +62,7 @@ export class Vault {
         }
       } catch {
         this.lock();
-        throw new Error('Could not unlock. Check your master password. If it is correct, the encrypted data may be damaged.');
+        throw new Error(options.mode === 'managed' ? 'Could not open this encrypted vault. Reconnect and try again.' : 'Could not unlock. Check your master password. If it is correct, the encrypted data may be damaged.');
       }
     }
     await this.persist();
@@ -82,8 +82,9 @@ export class Vault {
       const old = id ? this.entries.find(item => item.id === id && !item.deleted) : null;
       if (id && !old) throw new Error('This item no longer exists.');
       const record = { id: old?.id ?? crypto.randomUUID(), name: input.name.trim(), value: input.value,
-        kind: input.kind, deleted: false, version: crypto.randomUUID(), updatedAt: new Date().toISOString() };
+        kind: input.kind, description: input.description ?? '', deleted: false, version: crypto.randomUUID(), updatedAt: new Date().toISOString() };
       if (!record.name || !record.value || record.name.length > 160 || record.value.length > 32000
+        || typeof record.description !== 'string' || record.description.length > 2000
         || !['API key', 'Password', 'Variable', 'Secret'].includes(record.kind)) throw new Error('Enter a name and value (up to 32,000 characters).');
       this.entries = [...this.entries.filter(item => item.id !== record.id), record];
       this.pending = { ...this.pending, [record.id]: { baseVersion: Object.hasOwn(this.pending, record.id) ? this.pending[record.id].baseVersion : old?.version ?? null } };
@@ -99,7 +100,7 @@ export class Vault {
       if (!old) return;
       const previous = this.entries;
       const previousPending = this.pending;
-      this.entries = this.entries.map(item => item.id === id ? { ...item, value: '', name: '', deleted: true,
+      this.entries = this.entries.map(item => item.id === id ? { ...item, value: '', name: '', description: '', deleted: true,
         version: crypto.randomUUID(), updatedAt: new Date().toISOString() } : item);
       this.pending = { ...this.pending, [id]: { baseVersion: Object.hasOwn(this.pending, id) ? this.pending[id].baseVersion : old.version } };
       try { await this.persist(); }
@@ -112,9 +113,7 @@ export class Vault {
       for (let attempt = 0; attempt < 3; attempt++) {
         const remote = await this.fetchRow();
         if (!remote) throw new Error('Cloud vault not found. Local changes are still saved on this device.');
-        if (remote.wrapped_key !== this.row.wrapped_key || remote.salt !== this.row.salt) {
-          throw new Error('The cloud vault key changed. Local data is preserved; lock and reopen the vault.');
-        }
+        // Rewrapping preserves the data key. Authenticate the payload before accepting metadata.
         const remoteContents = await open(this.key, this.owner, remote);
         validateEntries(remoteContents.entries);
         if (!Object.keys(this.pending).length) {
@@ -147,8 +146,7 @@ export class Vault {
 
   restore(backup) {
     return this.serial(async () => {
-      if (backup?.app !== 'quiet-vault' || backup.backupVersion !== 1 || backup.owner !== this.owner
-        || backup.row?.wrapped_key !== this.row.wrapped_key || backup.row?.salt !== this.row.salt) {
+      if (backup?.app !== 'quiet-vault' || backup.backupVersion !== 1 || backup.owner !== this.owner) {
         throw new Error('This backup belongs to a different account or vault.');
       }
       const contents = await open(this.key, this.owner, backup.encrypted, 'cache');
