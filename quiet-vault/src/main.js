@@ -222,11 +222,11 @@ function showHome() {
   main.append(heading, element('h1', '', 'A clear head. A safe place.'));
   const toolbar = element('div', 'toolbar');
   const searchBox = element('div', 'search-box'); searchBox.innerHTML = icon('search');
-  const search = element('input'); search.type = 'search'; search.placeholder = 'Find a secret…';
+  const search = element('input'); search.type = 'search'; search.placeholder = 'Find or name a secret…';
   search.setAttribute('aria-label', 'Search secrets'); search.autocomplete = 'off'; search.value = query;
   searchBox.append(search);
   const add = element('button', 'primary add-button'); add.innerHTML = `${icon('plus')}<span>Add</span>`;
-  add.addEventListener('click', showAddSecret); toolbar.append(searchBox, add); main.append(toolbar);
+  add.addEventListener('click', () => showAddSecret(search.value.trim())); toolbar.append(searchBox, add); main.append(toolbar);
   const list = element('div', 'secret-list'); list.id = 'secret-list'; list.setAttribute('aria-label', 'Saved secrets');
   main.append(list); search.addEventListener('input', () => { query = search.value; renderList(); });
   renderList(); updateStatus(); search.focus();
@@ -258,7 +258,10 @@ function renderList() {
       try { await navigator.clipboard.writeText(item.value); toast('Copied.'); copy.innerHTML = icon('check'); setTimeout(() => { copy.innerHTML = icon('copy'); }, 1500); }
       catch { toast('Could not copy. Open the item to reveal and copy it manually.'); }
     });
-    row.append(open, copy); list.append(row);
+    row.append(open, copy);
+    const card = element('div', 'secret-card'); card.append(row);
+    if (item.description) card.append(descriptionNode(item.description));
+    list.append(card);
   }
 }
 
@@ -494,48 +497,49 @@ function showManagedGate() {
 }
 
 
-function showAddSecret() {
+// Render user text as text nodes; only explicit HTTP(S) URLs become links.
+function descriptionNode(text) {
+  const note = element('p', 'secret-description');
+  const pattern = /https?:\/\/[^\s<>"']+/gi;
+  let offset = 0;
+  for (const match of text.matchAll(pattern)) {
+    let href;
+    try { href = new URL(match[0]).href; } catch { continue; }
+    note.append(document.createTextNode(text.slice(offset, match.index)));
+    const link = element('a', '', match[0]);
+    link.href = href;
+    link.target = '_blank'; link.rel = 'noopener noreferrer';
+    note.append(link); offset = match.index + match[0].length;
+  }
+  note.append(document.createTextNode(text.slice(offset)));
+  return note;
+}
+
+function showAddSecret(prefilledName = '') {
   if (!vault) return;
   const current = vault;
-  let draftName = '', draftValue = '', draftDescription = '';
-  function nameStep() {
-    if (vault !== current) return;
-    const main = shell();
-    const back = element('button', 'back-button', 'All secrets'); back.onclick = showHome; main.append(back);
-    pageHeading(main, 'STEP 1 OF 2', 'Give it a name.', 'Something you will recognize later.');
-    const form = element('form', 'editor-form');
-    const name = inputField(form, 'Name', 'text', 'name', 'e.g. OpenAI · personal', 'off');
-    name.maxLength = 160; name.value = draftName;
-    const next = primary('Continue'); form.append(next); main.append(form);
-    form.onsubmit = event => {
-      event.preventDefault(); if (!name.value.trim()) { name.focus(); return; }
-      draftName = name.value; tokenStep();
-    };
-    name.focus();
+  const main = shell();
+  const back = element('button', 'back-button', 'All secrets'); back.onclick = showHome; main.append(back);
+  main.append(element('h1', 'add-title', prefilledName || 'Add a secret'));
+  const form = element('form', 'editor-form');
+  let name;
+  if (!prefilledName) {
+    name = inputField(form, 'Name', 'text', 'name', 'e.g. OpenAI', 'off'); name.maxLength = 160;
   }
-  function tokenStep() {
-    if (vault !== current) return;
-    const main = shell();
-    const back = element('button', 'back-button', 'Back'); main.append(back);
-    pageHeading(main, 'STEP 2 OF 2', 'Add the secret.', 'A token, password, or any value you want to keep.');
-    const form = element('form', 'editor-form');
-    const token = inputField(form, 'Token or password', 'password', 'value', 'Paste your secret here', 'off');
-    token.value = draftValue; token.maxLength = 32000; token.autocapitalize = 'off';
-    const description = inputField(form, 'Description (optional)', 'text', 'description', 'A link or a short note', 'off');
-    description.required = false; description.maxLength = 2000; description.value = draftDescription;
-    back.onclick = () => { draftValue = token.value; draftDescription = description.value; nameStep(); };
-    const error = element('p', 'form-error'); error.role = 'alert'; error.hidden = true;
-    const save = primary('Save secret'); form.append(error, save); main.append(form);
-    form.onsubmit = async event => {
-      event.preventDefault(); save.disabled = true; back.disabled = true; errorText(error, '');
-      try {
-        await current.save({ name: draftName, value: token.value, description: description.value, kind: 'Secret' });
-        token.value = ''; draftName = ''; draftValue = ''; draftDescription = ''; description.value = '';
-        if (vault === current) { showHome(); toast('Saved.'); scheduleSync(); }
-      } catch (failure) { if (vault === current) errorText(error, message(failure)); }
-      finally { save.disabled = false; back.disabled = false; }
-    };
-    token.focus();
-  }
-  nameStep();
+  const token = inputField(form, 'Token or password', 'password', 'value', 'Paste your secret', 'off');
+  token.maxLength = 32000; token.autocapitalize = 'off';
+  const description = inputField(form, 'Description or link (optional)', 'text', 'description', 'https://… or a short note', 'off');
+  description.required = false; description.maxLength = 2000;
+  const error = element('p', 'form-error'); error.role = 'alert'; error.hidden = true;
+  const save = primary('Save secret'); form.append(error, save); main.append(form);
+  form.onsubmit = async event => {
+    event.preventDefault(); save.disabled = true; back.disabled = true; errorText(error, '');
+    try {
+      await current.save({ name: prefilledName || name.value, value: token.value, description: description.value, kind: 'Secret' });
+      token.value = ''; description.value = '';
+      if (vault === current) { query = ''; showHome(); toast('Saved.'); scheduleSync(); }
+    } catch (failure) { if (vault === current) errorText(error, message(failure)); }
+    finally { save.disabled = false; back.disabled = false; }
+  };
+  (name || token).focus();
 }

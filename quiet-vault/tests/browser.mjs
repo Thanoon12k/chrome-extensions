@@ -65,12 +65,14 @@ await page.addInitScript(() => {
 });
 
 async function add(name, value, kind = 'API key') {
+  await page.getByRole('searchbox').fill(name);
   await page.getByRole('button', { name: 'Add', exact: true }).click();
-  await page.getByLabel('Name', { exact: true }).fill(name);
-  assert.equal(await page.getByLabel('Token or password', { exact: true }).count(), 0);
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  assert.equal(await page.getByLabel('Name', { exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Continue', exact: true }).count(), 0);
+  await page.getByRole('heading', { name, exact: true }).waitFor();
   await page.getByLabel('Token or password', { exact: true }).fill(value);
-  if (name.startsWith('OpenAI')) await page.getByLabel('Description (optional)', { exact: true }).fill('https://example.test/keys');
+  if (name.startsWith('GitHub')) await page.getByLabel('Description or link (optional)', { exact: true }).fill('javascript:alert(1) http://[invalid');
+  if (name.startsWith('OpenAI')) await page.getByLabel('Description or link (optional)', { exact: true }).fill('https://example.test/keys');
   await page.getByRole('button', { name: 'Save secret', exact: true }).click();
   await page.getByRole('button', { name: `Edit ${name}`, exact: true }).waitFor();
 }
@@ -84,8 +86,18 @@ try {
   await page.getByRole('searchbox').waitFor();
   await mkdir(output, { recursive: true });
   await page.screenshot({ path: resolve(output, 'quiet-vault-empty.png') });
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByLabel('Name', { exact: true }).waitFor();
+  await page.getByLabel('Token or password', { exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Continue', exact: true }).count(), 0);
+  await page.getByRole('button', { name: 'All secrets', exact: true }).click();
   await add('OpenAI · personal', 'demo-openai-value');
+  const savedLink = page.getByRole('link', { name: 'https://example.test/keys', exact: true });
+  assert.equal(await savedLink.getAttribute('href'), 'https://example.test/keys');
+  assert.equal(await savedLink.getAttribute('rel'), 'noopener noreferrer');
   await add('GitHub access token', 'demo-github-value', 'Secret');
+  assert.equal(await page.locator('.secret-description a').count(), 1);
+  await page.getByText('javascript:alert(1) http://[invalid', { exact: true }).waitFor();
   await add('DATABASE_URL', 'demo-database-value', 'Variable');
   await page.getByRole('button', { name: 'Sync vault now' }).count(); // Status has a title, not an extra focus control.
   await page.locator('#sync-status').click();

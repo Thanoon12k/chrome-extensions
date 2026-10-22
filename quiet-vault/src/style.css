@@ -5,3 +5,17 @@
 
 .google-button{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;height:46px;background:#fff;border:1px solid #dce3d5;border-radius:11px;color:#354d3d;font-size:13px;font-weight:600;margin-top:25px}.google-button:hover{background:#edf2e7}.google-mark{font-size:19px;font-weight:700;color:#4285f4}.auth-divider{display:flex;align-items:center;gap:12px;color:#a3ab9b;font-size:10px;margin:21px 0 18px}.auth-divider:before,.auth-divider:after{content:"";height:1px;background:#e4e9dc;flex:1}.auth-divider+.auth-form{margin-top:0}
 .brand-mark{width:36px;height:36px;border:0;background:transparent;border-radius:9px}.brand-mark img{display:block;width:36px;height:36px}
+
+/* Compact popup and tab share the same small form. */
+body{width:360px;min-width:360px;min-height:400px}#app{min-height:400px}
+header{height:64px;padding:16px 20px}.brand{font-size:18px;gap:7px}
+.brand-mark,.brand-mark img{width:30px;height:30px}main{padding:8px 20px 18px}
+h1{font-size:23px;margin-bottom:12px}.home-heading+h1{font-size:24px;margin:10px 0 18px;max-width:260px}
+.subtitle{margin-bottom:16px}.toolbar{margin-bottom:16px}.back-button{margin-bottom:16px}
+.editor-form{margin-top:16px}.field{margin-bottom:13px}.field input,.field select{height:40px}
+.primary{padding:11px 16px}.empty-state{padding:20px 8px}.empty-mark{margin-bottom:14px;width:48px;height:48px}
+footer{margin:0 20px;padding:12px 0}.add-title{overflow-wrap:anywhere}
+.secret-card{border-bottom:1px solid #e8ece3}.secret-card .secret-row{border-bottom:0;padding:11px 0}
+.secret-description{font-size:11px;line-height:1.5;color:#7b837c;margin:0 0 11px 50px;overflow-wrap:anywhere;white-space:pre-wrap}
+.secret-description a{color:#355a45;text-decoration:underline;text-underline-offset:2px}
+@media(min-width:600px){body{width:auto;min-height:100vh}#app{max-width:380px;min-height:400px;margin:24px auto;border-radius:18px}}

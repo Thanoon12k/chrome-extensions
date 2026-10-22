@@ -1,4 +1,4 @@
-# Quiet Vault — Chrome preview 0.2.1
+# Quiet Vault — Chrome preview 0.2.2
 
 A small personal vault for API keys, passwords, secrets, and variables. The home screen focuses on **Search** and **Add**. Android is deferred until the Chrome version is approved.
 
@@ -12,7 +12,7 @@ The Supabase redirect allowlist must contain `https://ecoganpmeologajglpdbkjnjmm
 
 ## Daily use
 
-- **Add → Name → Continue → Token or password + optional description → Save secret.** The description can hold a link or note. Back preserves your draft. No type choice is required when adding.
+- **Type the name in the home search field → Add → Token or password + optional description/link → Save secret.** Add opens one compact form, with the name already set. If the home field is empty, Name appears on that same form. Saved HTTP(S) links are clickable. No type choice is required when adding.
 - Search by name or type, copy from a row, or open a row to edit, reveal briefly, and delete with confirmation.
 - Options provides Lock, encrypted backup/restore, sign-in diagnostics, and Sign out.
 - Closing/hiding the vault, Escape, or two minutes of inactivity clears decrypted items from the UI. Google vaults reopen with the saved account session. The Open vault button after locking is a privacy cover, not an additional authentication factor. Sign out on shared devices.
@@ -41,6 +41,6 @@ Sign-in failures offer **Download sign-in diagnostics**, also available in Optio
 
 Node 22.12+ or 24+: `npm ci`, `npm test`, `npm run build`. Load `dist/`. `npm run dev` provides a separate HTTP preview; Google requires the installed extension.
 
-`npm run test:browser` checks Google-only sign-in, automatic opening, name-first adding, encrypted descriptions, editing/copy/delete, backup/restore, offline restart and syncing. `node tests/extension-smoke.mjs` loads an isolated real extension with simulated Google/API responses and verifies automatic Google opening, one-time migration, offline access, key removal on sign-out and popup continuation. Set `CHROME_PATH` / `EDGE_PATH` for an alternative Chromium browser.
+`npm run test:browser` checks Google-only sign-in, automatic opening, single-screen adding, encrypted descriptions, editing/copy/delete, backup/restore, offline restart and syncing. `node tests/extension-smoke.mjs` loads an isolated real extension with simulated Google/API responses and verifies automatic Google opening, one-time migration, offline access, key removal on sign-out and popup continuation. Set `CHROME_PATH` / `EDGE_PATH` for an alternative Chromium browser.
 
 Node tests exercise real encryption, rewrapping with old backup preservation, tampering, merge conflicts, offline storage and rollback. Live Supabase checks use dummy data and transaction rollback to verify permissions, stable separate account keys, migration revisions and private storage isolation. Supabase advisors report no findings for the vault objects; unrelated project findings are unchanged.

@@ -95,20 +95,16 @@ try {
   for (const event of diagnosticEvents) assert.deepEqual(Object.keys(event).sort(), ['at', 'id', 'reason', 'stage', 'version']);
   assert.ok(!JSON.stringify(diagnosticEvents).includes('test-one-time-code'));
   assert.equal(row.unlock_mode, 'managed');
+  await page.getByRole('searchbox').fill('My token');
   await page.getByRole('button', { name: 'Add', exact: true }).click();
-  assert.equal(await page.getByLabel('Token or password', { exact: true }).count(), 0);
-  await page.getByLabel('Name', { exact: true }).fill('My token');
-  await mkdir(process.env.VAULT_OUTPUT_DIR ?? 'test-results', { recursive: true });
-  await page.screenshot({ path: resolve(process.env.VAULT_OUTPUT_DIR ?? 'test-results', 'quiet-vault-add-name.png') });
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  assert.equal(await page.getByLabel('Name', { exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Continue', exact: true }).count(), 0);
+  await page.getByRole('heading', { name: 'My token', exact: true }).waitFor();
   await page.getByLabel('Token or password', { exact: true }).fill('dummy-value-preserved');
-  await page.getByLabel('Description (optional)', { exact: true }).fill('https://example.test/account');
-  await page.getByRole('button', { name: 'Back', exact: true }).click();
-  assert.equal(await page.getByLabel('Name', { exact: true }).inputValue(), 'My token');
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
-  assert.equal(await page.getByLabel('Token or password', { exact: true }).inputValue(), 'dummy-value-preserved');
+  await page.getByLabel('Description or link (optional)', { exact: true }).fill('https://example.test/account');
   assert.equal(await page.getByLabel('Token or password', { exact: true }).getAttribute('type'), 'password');
-  await page.screenshot({ path: resolve(process.env.VAULT_OUTPUT_DIR ?? 'test-results', 'quiet-vault-add-token.png') });
+  await mkdir(process.env.VAULT_OUTPUT_DIR ?? 'test-results', { recursive: true });
+  await page.screenshot({ path: resolve(process.env.VAULT_OUTPUT_DIR ?? 'test-results', 'quiet-vault-add-compact.png') });
   await page.getByRole('button', { name: 'Save secret', exact: true }).click();
   await page.getByRole('button', { name: 'Edit My token', exact: true }).waitFor();
   await page.locator('#sync-status').click();
@@ -171,5 +167,5 @@ try {
   await dedicated.getByText('Google sign-in was cancelled. You can try again.', { exact: true }).waitFor();
   assert.equal(dedicated.url(), `chrome-extension://${config.id}/index.html`);
   assert.deepEqual(errors, []);
-  console.log('PASS: Google PKCE sign-in without any background worker and with runtime messaging forced to fail; cancellation, cleanup, callback validation, session storage, Google-only new/offline/reopened vaults, one-time migration preserving existing secrets, name-first wizard with optional description and Back, key removal on sign-out, and popup-to-tab continuation. Google/API responses simulated.');
+  console.log('PASS: Google PKCE sign-in without any background worker and with runtime messaging forced to fail; cancellation, cleanup, callback validation, session storage, Google-only new/offline/reopened vaults, one-time migration preserving existing secrets, single form with a prefilled name and optional clickable link, key removal on sign-out, and popup-to-tab continuation. Google/API responses simulated.');
 } finally { await context.close(); }
